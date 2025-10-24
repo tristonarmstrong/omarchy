@@ -119,84 +119,69 @@ resolve_icon_url() {
   fi
 }
 
-select_best_ico_image() {
-  local target_png="$1"
-  local base_name="${target_png%.png}"
-  local best_icon=""
-  local max_size=0
-  
-  # Find all generated PNG files from the ico extraction, excluding the target
-  for icon_file in "${base_name}"-*.png; do
-    if [[ -f "$icon_file" && "$icon_file" != "$target_png" ]]; then
-      # Get the dimensions of the image
-      local dimensions
-      dimensions=$(magick identify -format "%wx%h" "$icon_file" 2>/dev/null || echo "0x0")
-      local width="${dimensions%x*}"
-      local height="${dimensions#*x}"
-      
-      # Calculate total pixels (width * height)
-      local size=$((width * height))
-      
-      # Keep track of the largest image
-      if [[ $size -gt $max_size ]]; then
-        max_size=$size
-        best_icon="$icon_file"
-      fi
-    fi
-  done
-  
-  # If we found a best icon, move it to the target location
-  if [[ -n "$best_icon" && -f "$best_icon" ]]; then
-    mv "$best_icon" "$target_png"
-    # Clean up the other generated files (excluding the target)
-    for file in "${base_name}"-*.png; do
-      if [[ -f "$file" && "$file" != "$target_png" ]]; then
-        rm -f "$file"
-      fi
-    done
-    return 0
-  fi
-  
-  return 1
-}
-
 download_and_convert() {
   local url="$1" png="$2"
   
-  # Extract file extension from URL or default to common formats
   local ext
   ext=$(echo "$url" | sed -E 's/.*\.([^?&#]+).*/\1/' | tr '[:upper:]' '[:lower:]')
   
-  # If no extension detected or it's not a common image format, try ico first
   if [[ ! "$ext" =~ ^(png|jpg|jpeg|gif|svg|ico|webp)$ ]]; then
     ext="ico"
   fi
   
   local tmp="${png%.png}.tmp.${ext}"
-  
-  if curl -sfL -o "$tmp" "$url"; then
-    # If it's already a PNG, just use it directly
-    if [[ "$ext" == "png" ]]; then
-      mv "$tmp" "$png"
-      printf '%s' "$png"
-    else
-      # Try to convert to PNG
-      if magick "$tmp" "$png" >/dev/null 2>&1; then
-        # Special handling for .ico files that create multiple images
-        if [[ "$ext" == "ico" ]]; then
-          select_best_ico_image "$png"
-        fi
-        
-        printf '%s' "$png"
-        rm -f "$tmp" || true
-      else
-        # If conversion fails, keep the original file
-        printf '%s' "$tmp"
-      fi
-    fi
+  local base_name="${png%.png}"
+
+  # Clean up any old extracted files
+  rm -f "${base_name}"-*.png
+
+  if ! curl -sfL --max-time 30 -o "$tmp" "$url"; then
+    return 1
+  fi
+
+  # Handle PNG directly
+  if [[ "$ext" == "png" ]]; then
+    mv "$tmp" "$png"
+    printf '%s' "$png"
     return 0
   fi
-  return 1
+
+  # Use ImageMagick to convert
+  if magick "$tmp" "${base_name}-temp.png" >/dev/null 2>&1; then
+    # ICO files → multiple outputs: base-temp-0.png, base-temp-1.png, ...
+    # SVG/WebP/etc → usually single: base-temp.png
+
+    local best_icon=""
+    local max_pixels=0
+
+    # Find all generated PNGs
+    for file in "${base_name}-temp.png" "${base_name}-temp"-*.png; do
+      [[ -f "$file" ]] || continue
+
+      local dims
+      dims=$(magick identify -format "%wx%h" "$file" 2>/dev/null || echo "0x0")
+      local w=${dims%x*} h=${dims#*x}
+      local pixels=$((w * h))
+
+      if (( pixels > max_pixels )); then
+        max_pixels=$pixels
+        best_icon="$file"
+      fi
+    done
+
+    if [[ -n "$best_icon" ]]; then
+      mv "$best_icon" "$png"
+      # Clean up all temp files
+      rm -f "${base_name}-temp"*".png" "$tmp"
+      printf '%s' "$png"
+      return 0
+    fi
+  fi
+
+  # Fallback: keep original if conversion fails
+  mv "$tmp" "$png" 2>/dev/null || cp "$tmp" "$png"
+  printf '%s' "$png"
+  return 0
 }
 
 mkdir -p "$ICON_DIR"
@@ -224,12 +209,19 @@ else
 
     ICON_URL="$(resolve_icon_url "$ICON_URL" "$FETCH_URL" "$APP_ORIGIN")"
 
-    if ICON_PATH="$(download_and_convert "$ICON_URL" "$PNG_PATH")"; then
-      : # set above
-    else
-      echo "Error: Could not find or download an icon for $APP_URL. Aborting installation." >&2
+    APP_NAME_SAFE=$(echo "$APP_NAME" | sed 's/[^a-zA-Z0-9._-]/_/g')
+    PNG_PATH="$ICON_DIR/${APP_NAME_SAFE}.png"
+
+    if ! ICON_PATH=$(download_and_convert "$ICON_URL" "$PNG_PATH"); then
+      echo "Error: Could not download or convert icon from $ICON_URL" >&2
       exit 1
     fi
+
+    # Ensure final icon exists
+    if [[ ! -f "$ICON_PATH" ]]; then
+      echo "Error: Icon file missing after processing: $ICON_PATH" >&2
+      exit 1
+    fi    
   else
     ICON_PATH="$ICON_DIR/$ICON_REF"
   fi
