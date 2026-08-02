@@ -283,3 +283,12 @@ New migration format:
 Omarchy 4.0 is upgraded through `bin/omarchy-upgrade-to-quattro`, not through the normal migration runner. Do not add compatibility migrations for old installer layouts; put pre-4 package-layout transition work in the upgrade command instead.
 
 Migrations may use raw `pacman`, `command -v`, or direct config edits when needed for one-off repair work.
+
+# Screensaver
+
+The screensaver launched by the Quickshell idle service (after `idle.screensaver` seconds in `shell.json`) has two runtime prerequisites that are not provided by the base package set or the install scripts:
+
+- `tte` from the `terminaltexteffects` Python package. Install with `pip install --user terminaltexteffects` (or `pipx install terminaltexteffects` if you prefer an isolated install).
+- A branding text file at `~/.config/omarchy/branding/screensaver.txt` that `omarchy-screensaver` reads via `tte -i`. The file is plain text shown with a random TTE effect; create the directory and put any content you want displayed.
+
+Without these, `omarchy-launch-screensaver` exits silently at the idle threshold and no screensaver window appears.
