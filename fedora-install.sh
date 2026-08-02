@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-OMARCHY_PATH="$(dirname "$(dirname "$(realpath "$0")")")"
+OMARCHY_PATH="$(dirname "$(realpath "$0")")"
 OMARCHY_INSTALL="$OMARCHY_PATH/install"
 BIN_DIR="$HOME/.local/bin"
 SRC_DIR="$HOME/.local/src"
@@ -24,8 +24,9 @@ mkdir -p "$SRC_DIR" "$BIN_DIR"
 log "1/10  Enable repositories (RPM Fusion + solopasha/hyprland COPR for uwsm + satty)"
 # ---------------------------------------------------------------------------
 sudo dnf install -y 'dnf-plugins-core'
-sudo dnf config-manager --add-repo https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
-sudo dnf config-manager --add-repo https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+# RPM Fusion is installed via RPM packages, not repo files
+sudo dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
+sudo dnf install -y https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
 
 sudo dnf copr enable -y solopasha/hyprland
 
@@ -48,10 +49,9 @@ log "3/10  Core desktop packages (dnf)"
 sudo dnf install -y \
   hyprland hyprlock hypridle waybar swww \
   mako grim slurp wl-clipboard \
-  mate-polkit polkit-mate-authentication-agent-1 \
-  sddm sddm-theme-breeze \
+  mate-polkit \
+  sddm \
   dnf-plugins-core rpm-build git \
-  starship \
   btop bat eza fd-find ripgrep \
   pipewire pipewire-pulse wireplumber \
   fcitx5 fcitx5-mozc \
@@ -60,48 +60,24 @@ sudo dnf install -y \
   firefox \
   libreoffice \
   vim nano \
-  htop btop \
+  htop \
   neovim \
   git curl wget unzip zip tree jq \
   python3-pip npm nodejs \
   gcc gcc-c++ make cmake \
-  lutris steam protonup-ng gamemode \
+  lutris steam gamemode \
   mesa-vulkan-drivers vulkan-tools \
-  intel-media-driver libva-utils \
   xdg-desktop-portal-hyprland xdg-desktop-portal-gtk \
-  gnome-desktop adwaita-icon-theme papirus-icon-theme \
-  fonts-jetbrains-mono fonts-omarchy ttf-jetbrains-mono-nerd \
-  noto-sans-fonts noto-color-emoji-fonts \
-  alacritty foot ghostty helix swayosd bluetui \
-  walker elephant satty uwsm powerprofilesctl \
-  tlp acpi brightnessctl playerctl pamixer \
+  adwaita-icon-theme papirus-icon-theme \
+  jetbrains-mono-fonts-all google-nerd-fonts \
+  google-noto-sans-fonts google-noto-emoji-color-fonts \
+  alacritty foot helix \
+  satty uwsm power-profiles-daemon \
+  acpi brightnessctl playerctl pamixer \
   wl-clipboard clipman wtype xdotool scrot flameshot \
   obsidian zathura zathura-pdf-mupdf zathura-djvu \
-  zathura-cb zathura-ps zathura-chm zathura-xps \
-  zathura-epub zathura-mobi zathura-cbz zathura-cbr \
-  zathura-tar zathura-rar zathura-7z zathura-iso \
-  zathura-dmg zathura-appimage zathura-fb2 zathura-txt \
-  zathura-html zathura-css zathura-js zathura-json \
-  zathura-yaml zathura-xml zathura-csv zathura-sql \
-  zathura-graphviz zathura-dot zathura-plantuml \
-  zathura-geogebra zathura-latex zathura-bib \
-  zathura-biblatex zathura-doc zathura-man zathura-info \
-  zathura-awk zathura-perl zathura-python zathura-ruby \
-  zathura-php zathura-java zathura-c zathura-cpp \
-  zathura-haskell zathura-lua zathura-rust zathura-go \
-  zathura-d zathura-swift zathura-kotlin zathura-scala \
-  zathura-clojure zathura-erlang zathura-elixir \
-  zathura-ocaml zathura-fsharp zathura-vb zathura-csharp \
-  zathura-typescript zathura-javascript \
-  zathura-coffeescript zathura-sass zathura-less \
-  zathura-scss zathura-postcss zathura-babel \
-  zathura-webpack zathura-rollup zathura-vite \
-  zathura-esbuild zathura-turbopack zathura-rsbuild \
-  zathura-vitepress zathura-astro zathura-svelte \
-  zathura-vue zathura-react zathura-next zathura-nuxt \
-  zathura-remix zathura-solid zathura-angular \
-  zathura-electron zathura-tauri zathura-wails \
-  zathura-flutter zathura-dart
+  zathura-cb zathura-ps \
+  --skip-unavailable --allowerasing
 
 # ---------------------------------------------------------------------------
 log "4/10  Hyprland + desktop extras (installed via dnf from solopasha/hyprland COPR)"
@@ -188,7 +164,7 @@ log "9/10  Services"
 # ---------------------------------------------------------------------------
 sudo systemctl enable --now sddm.service
 systemctl --user enable omarchy-recover-internal-monitor.service 2>/dev/null || true
-systemctl set-default graphical.target
+sudo systemctl set-default graphical.target
 
 # ---------------------------------------------------------------------------
 log "10/10  PATH + graphical session environment"

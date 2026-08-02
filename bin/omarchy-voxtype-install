@@ -8,7 +8,39 @@ set -e
 # Install voxtype and configure it for use.
 
 if gum confirm "Install Voxtype + AI model (~150MB) to enable dictation?"; then
-  omarchy-pkg-add wtype voxtype-bin
+  # Fedora: wtype is in the official repos; voxtype is not, so we install it
+  # separately. Prefer a prebuilt download, fall back to building via cargo.
+  if ! rpm -q wtype &>/dev/null; then
+    sudo dnf install -y wtype
+  fi
+
+  if ! command -v voxtype &>/dev/null; then
+    if sudo dnf install -y voxtype 2>/dev/null; then
+      :
+    else
+      # voxtype is not in the Fedora repos. On x86_64 a prebuilt .rpm is
+      # published on GitHub; on aarch64 (e.g. Fedora Asahi) the only
+      # out-of-the-box option is `cargo install --git`, which builds
+      # from the upstream repo and lands at ~/.cargo/bin/voxtype.
+      if [[ $(uname -m) == "x86_64" ]]; then
+        echo "voxtype is not in the Fedora repos. Install it from the upstream .rpm:" >&2
+        echo "  https://github.com/peteonrails/voxtype/releases" >&2
+        exit 1
+      fi
+
+      echo "voxtype is not in the Fedora repos. Installing build deps and building via cargo..."
+      sudo dnf install -y alsa-lib-devel clang-devel cmake pkgconf
+
+      # Make sure ~/.cargo/bin is on PATH for this session and for the
+      # voxtype systemd user unit that comes next.
+      export PATH="$HOME/.cargo/bin:$PATH"
+
+      # voxtype is not published on crates.io, only the git repo. Pin to
+      # v0.7.5 (last release with aarch64 Linux builds); drop --tag to
+      # track the dev branch.
+      cargo install --git https://github.com/peteonrails/voxtype --tag v0.7.5 voxtype --locked
+    fi
+  fi
 
   # Setup voxtype
   mkdir -p ~/.config/voxtype
