@@ -18,7 +18,31 @@ case "${1:-}" in
     ;;
 esac
 
-battery=$(upower -e 2>/dev/null | grep BAT | head -n 1)
+# Find the battery sysfs supply by type (names vary: BAT0, macsmc-battery, ...)
+battery_sys_path=""
+for supply in "$power_supply_path"/*; do
+  [[ -r $supply/type ]] || continue
+  [[ $(<"$supply/type") == "Battery" ]] || continue
+  # Skip peripheral-style batteries (e.g. wireless mouse HID++) that only
+  # report a `capacity` percentage — without energy/charge capacity files,
+  # every derived field (size, time, cycles) comes back empty.
+  [[ -r $supply/energy_full || -r $supply/charge_full ]] || continue
+  battery_sys_path=$supply
+  break
+done
+
+# Map that sysfs supply back to its UPower device (device paths are not
+# portable: "battery_BAT0" vs "battery_macsmc_battery").
+battery=""
+if [[ -n $battery_sys_path ]]; then
+  battery_sys_name=$(basename "$battery_sys_path")
+  for device in $(upower -e 2>/dev/null); do
+    if upower -i "$device" 2>/dev/null | grep -q "native-path: *$battery_sys_name"; then
+      battery=$device
+      break
+    fi
+  done
+fi
 [[ -z $battery ]] && exit 0
 
 battery_info=$(upower -i "$battery")
@@ -57,6 +81,7 @@ elif [[ -r $battery_path/current_now && -r $battery_path/voltage_now ]]; then
 fi
 
 power_rate=$(awk -v rate="${power_rate_raw:-0}" 'BEGIN {
+  if (rate < 0) rate = -rate
   rounded = sprintf("%.1f", rate)
   sub(/\.0$/, "", rounded)
   print rounded
@@ -65,8 +90,8 @@ state=$(awk '/state/ { print $2; exit }' <<<"$battery_info")
 threshold_start=$(awk '/charge-start-threshold:/ { gsub(/%/, "", $2); print int($2); exit }' <<<"$battery_info")
 threshold_end=$(awk '/charge-end-threshold:/ { gsub(/%/, "", $2); print int($2); exit }' <<<"$battery_info")
 
-[[ -z $threshold_end ]] && threshold_end=$(cat "$power_supply_path"/BAT*/charge_control_end_threshold 2>/dev/null | head -1)
-[[ -z $threshold_start ]] && threshold_start=$(cat "$power_supply_path"/BAT*/charge_control_start_threshold 2>/dev/null | head -1)
+[[ -z $threshold_end ]] && threshold_end=$(cat "$battery_sys_path"/charge_control_end_threshold 2>/dev/null | head -1)
+[[ -z $threshold_start ]] && threshold_start=$(cat "$battery_sys_path"/charge_control_start_threshold 2>/dev/null | head -1)
 
 ac_online=false
 for supply in "$power_supply_path"/*; do
@@ -107,7 +132,7 @@ if [[ $shell_output == "true" ]]; then
   printf 'size\t%s\n' "${capacity}Wh"
   printf 'time\t%s\n' "$time_remaining"
 
-  cycles=$(cat "$power_supply_path"/BAT*/cycle_count 2>/dev/null | head -1)
+  cycles=$(cat "$battery_sys_path"/cycle_count 2>/dev/null | head -1)
 
   [[ -n $cycles ]] && printf 'cycles\t%s\n' "$cycles"
 
