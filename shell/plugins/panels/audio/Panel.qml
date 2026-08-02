@@ -622,7 +622,7 @@ Panel {
 
   Timer {
     id: audioModelRefreshTimer
-    interval: 75
+    interval: 500
     repeat: false
     onTriggered: root.refreshDisplayAudioModels()
   }

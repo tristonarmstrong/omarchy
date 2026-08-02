@@ -193,7 +193,7 @@ Item {
       // leaving a black desktop until omarchy-shell is restarted. The wallpaper
       // itself is static, so this favors correctness over a small render-loop
       // optimization.
-      updatesEnabled: true
+      // updatesEnabled: true  // PanelWindow doesn't support this property
 
       property bool maskReady: false
 
