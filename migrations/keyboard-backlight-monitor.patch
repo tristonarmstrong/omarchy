@@ -1,0 +1,386 @@
+diff --git i/shell/plugins/panels/monitor/Panel.qml w/shell/plugins/panels/monitor/Panel.qml
+index bf4ab21d..2017141d 100644
+--- i/shell/plugins/panels/monitor/Panel.qml
++++ w/shell/plugins/panels/monitor/Panel.qml
+@@ -18,6 +18,10 @@ Panel {
+   property int pendingBrightnessPercent: 0
+   property bool brightnessSetQueued: false
+   property bool brightnessAvailable: false
++  property int kbdBrightnessPercent: 0
++  property int pendingKbdBrightnessPercent: 0
++  property bool kbdBrightnessSetQueued: false
++  property bool kbdBrightnessAvailable: false
+   property string internalMonitor: ""
+   property string externalMonitor: ""
+   property string focusedMonitor: ""
+@@ -34,10 +38,14 @@ Panel {
+   //   "brightness" - single slider row, selectedIndex = -1 sentinel
+   //                  (mirrors Audio's slider rows). Only present if a
+   //                  controllable backlight was detected.
+-  //   "scale"      - 6 Button scale presets; treated as a single
++  //   "kbdbacklight" - single slider row, selectedIndex = -1 sentinel
++  //                     Only present if keyboard backlight was detected.
++  //   "textsize"  - text size slider; treated as a single
++  //                  horizontal row from j/k's perspective.
++  //   "scale"     - 6 Button scale presets; treated as a single
+   //                  horizontal row from j/k's perspective. h/l moves
+   //                  between presets, identical to bluetooth's header.
+-  //   "monitors"   - vertical display row list for enabling/disabling displays;
++  //   "monitors"  - vertical display row list for enabling/disabling displays;
+   //                  j/k walks each row.
+   // Mouse hover on a target updates root state via the components' `hovered`
+   // signal so keyboard cursor and pointer share one highlight.
+@@ -75,6 +83,7 @@ Panel {
+   readonly property var visibleSections: {
+     var list = []
+     if (brightnessAvailable) list.push("brightness")
++    if (kbdBrightnessAvailable) list.push("kbdbacklight")
+     list.push("textsize")
+     list.push("scale")
+     if (displays.length > 1) list.push("monitors")
+@@ -82,20 +91,20 @@ Panel {
+   }
+ 
+   function sectionCount(section) {
+-    if (section === "brightness") return 0  // only the slider sentinel at -1
+-    if (section === "textsize") return 0    // slider sentinel at -1, like brightness
++    if (section === "brightness") return 0
++    if (section === "kbdbacklight") return 0
++    if (section === "textsize") return 0
+     if (section === "scale") return scaleValues.length
+     if (section === "monitors") return displays.length
+     return 0
+   }
+ 
+   function sectionIsSingleRow(section) {
+-    // brightness and text size are lone sliders; scale presets sit horizontally.
+-    return section === "brightness" || section === "textsize" || section === "scale"
++    return section === "brightness" || section === "kbdbacklight" || section === "textsize" || section === "scale"
+   }
+ 
+   function sectionFirstIndex(section) {
+-    if (section === "brightness" || section === "textsize") return -1
++    if (section === "brightness" || section === "kbdbacklight" || section === "textsize") return -1
+     return 0
+   }
+ 
+@@ -133,7 +142,11 @@ Panel {
+   // because adjustBrightness handles horizontal motion on the brightness
+   // slider.
+   function moveCursorH(delta) {
+-    if (focusSection !== "scale") return
++    if (focusSection === "scale") return
++    if (focusSection === "kbdbacklight") {
++      adjustKbdBrightness(delta)
++      return
++    }
+     var next = selectedIndex + delta
+     if (next < 0) next = 0
+     if (next > scaleValues.length - 1) next = scaleValues.length - 1
+@@ -146,6 +159,12 @@ Panel {
+     setBrightness(root.brightnessPercent + delta)
+   }
+ 
++  function adjustKbdBrightness(delta) {
++    if (focusSection !== "kbdbacklight") return
++    if (!kbdBrightnessAvailable) return
++    setKbdBrightness(root.kbdBrightnessPercent + delta)
++  }
++
+   function activateCursor() {
+     if (focusSection === "scale" && selectedIndex >= 0 && selectedIndex < scaleValues.length) {
+       setScale(scaleValues[selectedIndex])
+@@ -155,6 +174,10 @@ Panel {
+       var d = displays[selectedIndex]
+       if (d) toggleDisplay(d.name, d.enabled)
+     }
++    if (focusSection === "kbdbacklight") {
++      // kbd backlight: no separate action; the slider value is the action.
++      return
++    }
+     // brightness: no separate action; the slider value is the action.
+   }
+ 
+@@ -168,8 +191,8 @@ Panel {
+     }
+     var count = sectionCount(focusSection)
+     if (sectionIsSingleRow(focusSection)) {
+-      // brightness/text size use the -1 sentinel; scale clamps into the presets.
+-      if (focusSection === "brightness" || focusSection === "textsize") selectedIndex = -1
++      // brightness/text size/kbd backlight use the -1 sentinel; scale clamps into the presets.
++      if (focusSection === "brightness" || focusSection === "textsize" || focusSection === "kbdbacklight") selectedIndex = -1
+       else if (selectedIndex < 0 || selectedIndex >= count) selectedIndex = 0
+       return
+     }
+@@ -211,6 +234,8 @@ Panel {
+     return JSON.stringify({
+       brightness: root.brightnessPercent,
+       brightnessAvailable: root.brightnessAvailable,
++      kbdBrightness: root.kbdBrightnessPercent,
++      kbdBrightnessAvailable: root.kbdBrightnessAvailable,
+       focusedMonitor: root.focusedMonitor,
+       scale: root.monitorScale,
+       displays: root.displays
+@@ -221,6 +246,7 @@ Panel {
+     target: "omarchy.monitor"
+ 
+     function brightness(percent: string): string { return root.brightnessIpc(percent) }
++    function kbdBrightness(percent: string): string { return root.kbdBrightnessIpc(percent) }
+     function state(): string { return root.stateIpc() }
+     function open() { root.open() }
+     function close() { root.close() }
+@@ -231,6 +257,7 @@ Panel {
+ 
+   function refresh() {
+     if (!stateProc.running) stateProc.running = true
++    if (!kbdStateProc.running) kbdStateProc.running = true
+   }
+ 
+   function setBrightness(value) {
+@@ -248,9 +275,38 @@ Panel {
+     setBrightnessProc.running = true
+   }
+ 
+-  function previewBrightness(value) {
+-    root.brightnessPercent = Model.clampBrightness(value)
+-    brightnessDebounce.restart()
++  function setKbdBrightness(value) {
++    var percent = Model.clampBrightness(value)
++    root.kbdBrightnessPercent = percent
++    root.pendingKbdBrightnessPercent = percent
++
++    if (setKbdBrightnessProc.running) {
++      root.kbdBrightnessSetQueued = true
++      return
++    }
++
++    root.kbdBrightnessSetQueued = false
++    setKbdBrightnessProc.command = ["bash", "-c", "brightnessctl -d kbd_backlight set " + percent + "%"]
++    setKbdBrightnessProc.running = true
++  }
++
++  function previewKbdBrightness(value) {
++    root.kbdBrightnessPercent = Model.clampBrightness(value)
++    kbdBrightnessDebounce.restart()
++  }
++
++  function showKbdBrightnessOsd(percent) {
++    if (!bar || !bar.shell) return
++    bar.shell.summon("omarchy.osd", JSON.stringify({
++      icon: "keyboard",
++      value: percent
++    }))
++  }
++
++  function kbdBrightnessIpc(percent) {
++    var value = Number(percent)
++    root.setKbdBrightness(value)
++    return "got " + root.pendingKbdBrightnessPercent
+   }
+ 
+   function showBrightnessOsd(percent) {
+@@ -360,6 +416,9 @@ Panel {
+       if (brightnessAvailable) {
+         focusSection = "brightness"
+         selectedIndex = -1
++      } else if (kbdBrightnessAvailable) {
++        focusSection = "kbdbacklight"
++        selectedIndex = -1
+       } else {
+         focusSection = "scale"
+         selectedIndex = 0
+@@ -369,6 +428,7 @@ Panel {
+   }
+ 
+   onBrightnessAvailableChanged: clampCursor()
++  onKbdBrightnessAvailableChanged: clampCursor()
+   onDisplaysChanged: clampCursor()
+   onScaleValuesChanged: clampCursor()
+   onVisibleSectionsChanged: clampCursor()
+@@ -404,6 +464,24 @@ Panel {
+     }
+   }
+ 
++  Process {
++    id: kbdStateProc
++    command: ["brightnessctl", "-m", "-d", "kbd_backlight"]
++    stdout: StdioCollector {
++      waitForEnd: true
++      onStreamFinished: {
++        var fields = String(text || "").trim().split(",")
++        var percent = parseInt(String(fields[3] || "").replace("%", ""), 10)
++        root.kbdBrightnessAvailable = fields.length >= 5 && isFinite(percent)
++        if (root.kbdBrightnessAvailable) {
++          root.kbdBrightnessPercent = Math.max(0, Math.min(100, percent))
++        } else {
++          root.kbdBrightnessPercent = 0
++        }
++      }
++    }
++  }
++
+   Timer {
+     id: brightnessDebounce
+     interval: 180
+@@ -429,6 +507,24 @@ Panel {
+     }
+   }
+ 
++  Timer {
++    id: kbdBrightnessDebounce
++    interval: 180
++    repeat: false
++    onTriggered: root.setKbdBrightness(root.kbdBrightnessPercent)
++  }
++
++  Process {
++    id: setKbdBrightnessProc
++    stdout: StdioCollector { waitForEnd: true }
++    onRunningChanged: {
++      if (running) return
++      if (root.kbdBrightnessSetQueued) {
++        root.setKbdBrightness(root.pendingKbdBrightnessPercent)
++      }
++    }
++  }
++
+   Process {
+     id: actionProc
+     stdout: StdioCollector { waitForEnd: true }
+@@ -471,16 +567,19 @@ Panel {
+     bar: root.bar
+     text: Quickshell.screens.length > 1 ? "󰍺" : "󰍹"
+     onPressed: function(b) { root.toggle() }
+-    onWheelMoved: function(delta) {
+-      if (!root.brightnessAvailable) return
+-      var wheel = Util.wheelSteps(root.wheelAccumulator, delta)
+-      root.wheelAccumulator = wheel.remainder
+-      if (wheel.steps === 0) return
+-      root.setBrightness(root.brightnessPercent + wheel.steps * 5)
+-      root.showBrightnessOsd(root.brightnessPercent)
+-    }
+-  }
+-
++onWheelMoved: function(delta) {
++       var wheel = Util.wheelSteps(root.wheelAccumulator, delta)
++       root.wheelAccumulator = wheel.remainder
++       if (wheel.steps === 0) return
++       if (root.focusSection === "kbdbacklight" && root.kbdBrightnessAvailable) {
++         root.setKbdBrightness(root.kbdBrightnessPercent + wheel.steps * 5)
++         root.showKbdBrightnessOsd(root.kbdBrightnessPercent)
++       } else if (root.brightnessAvailable) {
++         root.setBrightness(root.brightnessPercent + wheel.steps * 5)
++         root.showBrightnessOsd(root.brightnessPercent)
++       }
++}
++}
+   KeyboardPanel {
+     id: panel
+     anchorItem: button
+@@ -557,14 +656,17 @@ Panel {
+                 width: parent.width
+               }
+ 
+-              Text {
+-                id: heroLabel
+-                text: {
+-                  if (root.brightnessAvailable) {
+-                    return root.brightnessName(brightnessSlider.dragging ? brightnessSlider.liveValue : root.brightnessPercent).toUpperCase()
+-                  }
+-                  return "FIXED BRIGHTNESS"
+-                }
++Text {
++                 id: heroLabel
++                 text: {
++                   if (root.brightnessAvailable) {
++                     return root.brightnessName(brightnessSlider.dragging ? brightnessSlider.liveValue : root.brightnessPercent).toUpperCase()
++                   }
++                   if (root.kbdBrightnessAvailable) {
++                     return root.brightnessName(kbdSlider.dragging ? kbdSlider.liveValue : root.kbdBrightnessPercent).toUpperCase()
++                   }
++                   return "FIXED BRIGHTNESS"
++                 }
+                 color: Qt.darker(root.bar.foreground, 1.4)
+                 font.family: root.bar.fontFamily
+                 font.pixelSize: Style.font.caption
+@@ -650,6 +752,80 @@ Panel {
+             }
+           }
+ 
++          // ---------- Keyboard Backlight ----------
++          PanelSeparator {
++            visible: root.kbdBrightnessAvailable
++            foreground: root.bar.foreground
++          }
++
++          Column {
++            visible: root.kbdBrightnessAvailable
++            width: parent.width
++            spacing: Style.space(6)
++
++            Item {
++              width: parent.width
++              implicitHeight: Math.max(kbdHeader.implicitHeight, kbdPercent.implicitHeight)
++
++              PanelSectionHeader {
++                id: kbdHeader
++                text: "KEYBOARD"
++                foreground: root.bar.foreground
++                fontFamily: root.bar.fontFamily
++                anchors.left: parent.left
++                anchors.verticalCenter: parent.verticalCenter
++              }
++
++              Text {
++                id: kbdPercent
++                text: Math.round(kbdSlider.dragging ? kbdSlider.liveValue : root.kbdBrightnessPercent) + "%"
++                color: Qt.darker(root.bar.foreground, 1.4)
++                font.family: root.bar.fontFamily
++                font.pixelSize: Style.font.caption
++                font.bold: true
++                anchors.right: parent.right
++                anchors.rightMargin: Style.space(6)
++                anchors.verticalCenter: parent.verticalCenter
++              }
++            }
++
++            CursorSurface {
++              id: kbdRow
++              width: parent.width
++              height: kbdSlider.implicitHeight + Style.spacing.controlGap
++              hasCursor: root.cursorActive && root.focusSection === "kbdbacklight" && root.selectedIndex === -1
++              onHasCursorChanged: if (hasCursor) root.ensureCursorVisible(kbdRow)
++              foreground: root.bar.foreground
++              outline: true
++
++              PanelSlider {
++                id: kbdSlider
++                bar: root.bar
++                anchors.fill: parent
++                anchors.leftMargin: Style.space(6)
++                anchors.rightMargin: Style.space(6)
++                minimum: 0
++                maximum: 100
++                step: 5
++                value: root.kbdBrightnessPercent
++                integer: true
++                onMoved: function(v) { root.previewKbdBrightness(v) }
++                onReleased: function(v) {
++                  kbdBrightnessDebounce.stop()
++                  root.setKbdBrightness(v)
++                }
++              }
++
++              HoverHandler {
++                onHoveredChanged: if (hovered && !root.reflowingText) {
++                  root.cursorActive = true
++                  root.focusSection = "kbdbacklight"
++                  root.selectedIndex = -1
++                }
++              }
++            }
++          }
++
+           // ---------- Text size ----------
+           PanelSeparator {
+             foreground: root.bar.foreground
