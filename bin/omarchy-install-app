@@ -2,7 +2,7 @@
 
 # omarchy:summary=Install a packaged app, surfacing the install in a floating terminal
 # omarchy:args=<display-name> <packages>
-# omarchy:examples=omarchy install app 'LM Studio' lmstudio-bin
+# omarchy:examples=omarchy install app Vim vim-enhanced
 
 name="${1-}"
 packages="${2-}"

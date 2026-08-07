@@ -2,7 +2,7 @@
 
 # omarchy:summary=Create a desktop launcher for a RetroArch game
 # omarchy:args=[core path-to-game]
-# omarchy:examples=omarchy games retro install snes9x ~/Games/roms/snes/game.sfc | omarchy-games-retro-install /usr/lib/libretro/mgba_libretro.so ~/Games/roms/gba/game.gba
+# omarchy:examples=omarchy games retro install mgba ~/Games/roms/gba/game.gba | omarchy-games-retro-install /usr/lib64/libretro/mgba.libretro ~/Games/roms/gba/game.gba
 
 set -e
 
@@ -10,7 +10,7 @@ if (( $# == 0 )); then
   mapfile -t cores < <(omarchy-games-retro-cores)
 
   if (( ${#cores[@]} == 0 )); then
-    omarchy-notification-send -g 󰯉 "No RetroArch cores found" "/usr/lib/libretro"
+    omarchy-notification-send -g 󰯉 "No RetroArch cores found" "/usr/lib64/libretro"
     exit 1
   fi
 
@@ -26,7 +26,7 @@ elif (( $# == 2 )); then
   game_path="$2"
 else
   echo "Usage: omarchy-games-retro-install [core path-to-game]"
-  echo "Example: omarchy-games-retro-install snes9x ~/Games/roms/snes/game.sfc"
+  echo "Example: omarchy-games-retro-install mgba ~/Games/roms/gba/game.gba"
   exit 1
 fi
 
@@ -38,7 +38,7 @@ fi
 if [[ $core == */* ]]; then
   core_path="$core"
 else
-  core_path="/usr/lib/libretro/${core}_libretro.so"
+  core_path="/usr/lib64/libretro/${core}.libretro"
 fi
 
 if [[ ! -f $core_path ]]; then

@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # omarchy:summary=Install one of the approved terminals and set it as the default for Omarchy (Super + Return etc).
-# omarchy:args=<alacritty|foot|ghostty|kitty>
+# omarchy:args=<alacritty|foot|kitty>
 # omarchy:requires-sudo=true
 
 if (($# == 0)); then
-  echo "Usage: omarchy-install-terminal [alacritty|foot|ghostty|kitty]"
+  echo "Usage: omarchy-install-terminal [alacritty|foot|kitty]"
   exit 1
 fi
 
@@ -15,7 +15,6 @@ package="$1"
 case "$package" in
 alacritty) desktop_id="Alacritty.desktop" ;;
 foot) desktop_id="foot.desktop" ;;
-ghostty) desktop_id="com.mitchellh.ghostty.desktop" ;;
 kitty) desktop_id="kitty.desktop" ;;
 *)
   echo "Unknown terminal: $package"

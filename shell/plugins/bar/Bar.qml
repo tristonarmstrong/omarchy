@@ -48,6 +48,10 @@ Item {
   property bool centerHoverRevealSuppressed: false
   property int barConfigSerial: 0
   property string position: "top"
+  // Physical pixel height of the MacBook notch (j314 panel). The top bar's
+  // minimum height is derived per screen from this, so the bar always covers
+  // the notch regardless of font size or display scale.
+  readonly property int macbookNotchPhysicalHeight: 74
   // Resolves through fontconfig at paint time (Style.font.family defaults
   // to "monospace"), so changing the system font (via `omarchy-font-set`)
   // updates the bar without a reload.
@@ -940,6 +944,14 @@ Item {
 
     visible: !root.barHidden
 
+    // Minimum top-bar height in logical px so the bar always covers the
+    // MacBook notch (74 physical px converted at this screen's scale).
+    readonly property int notchMinHeight: {
+      var s = barWindow.screen
+      var scale = (s && s.devicePixelRatio > 0) ? s.devicePixelRatio : 1
+      return Math.ceil(root.macbookNotchPhysicalHeight / scale)
+    }
+
     anchors {
       top: root.position === "top" || root.vertical
       bottom: root.position === "bottom" || root.vertical
@@ -948,7 +960,7 @@ Item {
     }
 
     implicitWidth: root.vertical ? root.barSize : 0
-    implicitHeight: root.vertical ? 0 : root.barSize
+    implicitHeight: root.vertical ? 0 : (root.position === "top" ? Math.max(root.barSize, barWindow.notchMinHeight) : root.barSize)
     color: root.transparent ? "transparent" : root.background
     surfaceFormat.opaque: false
     WlrLayershell.namespace: "omarchy-bar"
@@ -1150,6 +1162,14 @@ Item {
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
+    // Same minimum-height logic as BarPanel: the top preview must cover the
+    // MacBook notch (74 physical px at this screen's scale).
+    readonly property int notchMinHeight: {
+      var s = moveGhostWindow.ghostScreen
+      var scale = (s && s.devicePixelRatio > 0) ? s.devicePixelRatio : 1
+      return Math.ceil(root.macbookNotchPhysicalHeight / scale)
+    }
+
     anchors {
       top: true
       bottom: true
@@ -1177,7 +1197,7 @@ Item {
         x: modelData === "right" ? parent.width - edgeSize : 0
         y: modelData === "bottom" ? parent.height - edgeSize : 0
         width: edgeVertical ? edgeSize : parent.width
-        height: edgeVertical ? parent.height : edgeSize
+        height: edgeVertical ? parent.height : (modelData === "top" ? Math.max(edgeSize, moveGhostWindow.notchMinHeight) : edgeSize)
         color: root.transparent ? "transparent" : root.background
         borderSpec: Border.flat(root.barForeground, 1)
         visible: opacity > 0
