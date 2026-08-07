@@ -942,7 +942,12 @@ Item {
   component BarPanel: PanelWindow {
     id: barWindow
 
-    visible: !root.barHidden
+    visible: !root.barHidden && !remapGuard.remapping
+
+    ScreenMoveRemap {
+      id: remapGuard
+      window: barWindow
+    }
 
     // Minimum top-bar height in logical px so the bar always covers the
     // MacBook notch (74 physical px converted at this screen's scale).

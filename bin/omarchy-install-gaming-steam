@@ -10,4 +10,4 @@ omarchy-pkg-add steam
 echo ""
 echo "Steam will start automatically now. This might take a while..."
 
-setsid gtk-launch steam >/dev/null 2>&1 &
+setsid uwsm-app -- gtk-launch steam >/dev/null 2>&1 &

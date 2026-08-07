@@ -135,6 +135,24 @@ assert(
   rankScore('style.font', 'font') < rankScore('apps.fontforge', 'font'),
   'menu keeps a better-matching menu entry above a weaker app match'
 )
+
+// Routing: htop ships `Keywords=system;...`, which app rows carry as aliases.
+// An installed app must never capture a menu route (SUPER+ESCAPE opens the
+// `system` menu), while its keywords keep working for search.
+const routed = menu.mergeAppRows(rankBase.items, rankBase.itemOrder, [
+  { id: 'apps.htop', parent: 'apps', kind: 'app', label: 'Htop', description: 'Process Viewer', aliases: ['Process Viewer', 'system', 'process'] }
+])
+assertEqual(menu.resolveRoute(routed.items, routed.itemOrder, 'system'), 'system', 'menu routes an exact id even when an app keyword matches it')
+assertEqual(menu.resolveRoute(routed.items, routed.itemOrder, 'process'), 'process', 'menu never routes to an app row through its keywords')
+assertEqual(menu.resolveRoute(routed.items, routed.itemOrder, 'power-menu'), 'system', 'menu routes declared aliases to their item')
+assertEqual(menu.resolveRoute(routed.items, routed.itemOrder, 'power_menu'), 'system', 'menu normalizes underscores in routes')
+assertEqual(menu.resolveRoute(routed.items, routed.itemOrder, ''), 'root', 'menu routes empty input to root')
+assertEqual(menu.resolveRoute(routed.items, routed.itemOrder, 'no-such-route'), 'no-such-route', 'menu falls through to the literal input')
+assert(menu.matchesQuery(routed.items['apps.htop'], 'system', true), 'menu still finds an app by its keywords in search')
+assert(
+  /function resolveRoute\(input\) \{\s*\n\s*return MenuModel\.resolveRoute\(root\.items, root\.itemOrder, input\)\s*\n\s*\}/.test(menuQml),
+  'menu delegates route resolution to the shared model'
+)
 const triggerItems = defaultItems.filter(item => item.parent === 'trigger')
 assertEqual(
   triggerItems[0].id,
@@ -162,11 +180,44 @@ assert(
   defaultById['setup.direct-boot'].action.includes('omarchy-setup-direct-boot'),
   'menu places Direct Boot directly under Setup'
 )
+const setupEntries = defaultItems.filter(item => item.parent === 'setup')
 assertEqual(
-  defaultItems.findIndex(item => item.id === 'setup.direct-boot'),
-  defaultItems.findIndex(item => item.id === 'setup.input') + 1,
-  'menu lists Direct Boot immediately below Input'
+  setupEntries[setupEntries.length - 1].id,
+  'setup.direct-boot',
+  'menu lists Direct Boot last under Setup'
 )
+const expectedAgents = {
+  pi: { icon: '\ue901', iconFont: 'omarchy', label: 'Pi' },
+  omp: { icon: '\ue903', iconFont: 'omarchy', label: 'omp' },
+  opencode: { icon: '\ue902', iconFont: 'omarchy', label: 'OpenCode' },
+  claude: { icon: '󰛄', label: 'Claude' },
+  codex: { icon: '\ue905', iconFont: 'omarchy', label: 'Codex' },
+  grok: { icon: '\ue904', iconFont: 'omarchy', label: 'Grok' },
+  gemini: { icon: '󰫢', label: 'Gemini' },
+  copilot: { icon: '', label: 'Copilot' },
+  crush: { icon: '󰋑', label: 'Crush' },
+}
+assert(
+  Object.entries(expectedAgents).every(([agent, expected]) => {
+    const entry = defaultById[`setup.default.agent.${agent}`]
+    return entry
+      && entry.icon === expected.icon
+      && entry.iconFont === (expected.iconFont || '')
+      && entry.label === expected.label
+      && entry.action === `omarchy-default-agent ${agent}`
+      && !entry.when
+      && entry.checked.includes(`== \"${agent}\"`)
+  }),
+  'menu exposes every mise-installable coding agent with its own glyph under Defaults > Agent'
+)
+assertDeepEqual(
+  defaultItems
+    .filter(item => item.parent === 'setup.default.agent')
+    .map(item => item.label),
+  ['Claude', 'Codex', 'Copilot', 'Crush', 'Gemini', 'Grok', 'omp', 'OpenCode', 'Pi'],
+  'menu sorts coding agents alphabetically'
+)
+assert(!defaultById['install.ai.crush'], 'menu removes Crush from Install > AI')
 assert(
   defaultById['setup.security.passwordless-sudo'].action.includes('omarchy-sudo-passwordless'),
   'menu places Passwordless Sudo under Setup > Security'
@@ -452,3 +503,7 @@ assert(
   'mouse activation carries pointer intent into subordinate menus'
 )
 JS
+
+font_charset=$(fc-query --format='%{charset}' "$ROOT/default/fonts/omarchy/omarchy.ttf")
+[[ $font_charset == *"e900-e905"* ]] || fail "Omarchy icon font includes every custom menu glyph"
+pass "Omarchy icon font includes the official agent marks"
